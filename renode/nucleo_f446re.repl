@@ -1,0 +1,9 @@
+// NUCLEO-F446RE for Renode: Renode's generic STM32F4 platform with the core
+// clock set to what our firmware configures (180 MHz SysTick, Cortex-M4F).
+using "platforms/cpus/stm32f4.repl"
+
+nvic:
+    systickFrequency: 180000000
+
+cpu:
+    cpuType: "cortex-m4f"

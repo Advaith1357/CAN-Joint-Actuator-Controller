@@ -1,0 +1,29 @@
+:name: joint-actuator-fw on a simulated NUCLEO-F446RE
+:description: Runs firmware-sim.elf with CAN1 bridged to UDP for tools/harness.
+:
+: Run from the repository root (paths are relative to it). Variables, set with
+: -e before including this script:
+:   $elf      firmware image          (default: build/stm32/firmware-sim.elf)
+:   $rx_port  UDP port Renode listens on for CAN frames from the host
+:   $tx_port  UDP port Renode sends bus traffic to
+:   $uart_log file for USART2 output   (default: build/stm32/uart.log)
+
+$elf?=@build/stm32/firmware-sim.elf
+$rx_port?=47101
+$tx_port?=47102
+$uart_log?=@build/stm32/uart.log
+
+include @renode/UdpCanBridge.cs
+
+mach create "actuator"
+machine LoadPlatformDescription @renode/nucleo_f446re.repl
+
+emulation CreateCANHub "canhub"
+connector Connect sysbus.can1 canhub
+machine CreateUdpCanBridge "udpcan" $rx_port $tx_port
+connector Connect sysbus.udpcan canhub
+
+sysbus.usart2 CreateFileBackend $uart_log true
+sysbus LoadELF $elf
+
+start
