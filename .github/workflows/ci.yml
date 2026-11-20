@@ -1,0 +1,53 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  host:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit tests
+        run: make CC=${{ matrix.cc }} test
+      - name: Unit tests (ASan + UBSan)
+        run: make CC=${{ matrix.cc }} sanitize
+      - name: HIL tests against the simulator
+        run: make CC=${{ matrix.cc }} hil
+      - name: HIL tests (ThreadSanitizer)
+        if: matrix.cc == 'clang'
+        run: make CC=clang tsan-hil
+
+  cortex-m4:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Arm GNU toolchain
+        run: sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi
+      - name: Cross-compile target code and check for double-precision math
+        run: make arm-check
+      - name: Fetch pinned FreeRTOS / CMSIS sources
+        run: ./tools/fetch_deps.sh
+      - name: Build STM32F446 firmware images (hardware + simulation)
+        run: make stm32
+      - name: Install Renode 1.17.0
+        run: |
+          curl -fsSL -o renode.tar.gz https://github.com/renode/renode/releases/download/v1.17.0/renode-1.17.0.linux-portable.tar.gz
+          echo "4ba7c68b59e2447f188ef4b4b112fcccd2802582c460beedceb63b84e5605a5f  renode.tar.gz" | sha256sum -c -
+          mkdir -p renode-bin && tar -xzf renode.tar.gz -C renode-bin --strip-components=1
+      - name: HIL tests against the firmware image in Renode
+        run: make renode-hil RENODE=$PWD/renode-bin/renode
+      - name: Keep firmware images and UART logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: |
+            build/stm32/*.elf
+            build/stm32/*.map
+            build/stm32/uart-*.log
